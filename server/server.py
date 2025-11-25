@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 """
-Centralized P2P-CI Server for CSC/ECE 573 Project #1.
+Centralized P2P-CI Server
 
 This process listens on TCP port 7734 and services ADD, LOOKUP, and LIST
-requests from peers participating in the P2P file-sharing system.  The message
-format follows the project specification and mirrors the helper utilities in
-``shared.protocol`` so that peers and server share a consistent protocol
-implementation.
+requests from peers participating in the P2P file-sharing system.
 """
-from __future__ import annotations
 
+from __future__ import annotations
 import logging
 import socket
 import sys
@@ -183,10 +180,10 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]) -> None:
                 if number is None or not title:
                     send_response(conn, 400, "Bad Request", "", log_target=log_target)
                     continue
-                # Update the index with this peer's RFC record
+
                 INDEX.add(number, title, host, port_value)
                 LOGGER.info("Registered RFC %s for %s:%s", number, host, port_value)
-                # Echo back only the record just added as required by the specification
+                
                 body = f"RFC {number} {title} {host} {port_value}"
                 send_response(conn, 200, "OK", body, log_target=log_target)
             elif method == "LOOKUP":

@@ -270,10 +270,8 @@ class PeerNode:
     def start(self) -> None:
         """Start the upload server and register any existing RFCs with the central server.
 
-        According to the project specification, when a peer joins the P2P‑CI
-        system it should provide information about the RFCs it currently has
-        available.  This method therefore starts the local upload server and
-        performs an initial registration of all RFC files found in the configured
+        This method starts the local upload server and performs an initial registration of 
+        all RFC files found in the configured
         ``rfc_store`` directory.
         """
         self.upload_server.start()
@@ -399,10 +397,6 @@ class PeerNode:
         return imported
 
     def _download_from_peer(self, rfc_number: int, host: str, port: int) -> Tuple[str, str]:
-        # According to the project specification, the Host header in a P2P GET
-        # request must contain the hostname of the peer **serving** the RFC,
-        # not the host of the requester.  Therefore set Host to the remote
-        # server's hostname (the `host` parameter) rather than our own.
         headers = {
             "Host": host,
             "OS": platform.platform(),

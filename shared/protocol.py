@@ -1,8 +1,8 @@
 """
-Protocol helpers for the CSC/ECE 573 P2P-CI project.
+Protocol helpers
 
-This module knows how to construct and parse P2P-CI/1.0 request/response
-messages.  All helpers operate on CRLF-terminated strings and return bytes
+This module helps construct and parse P2P-CI/1.0 request/response
+messages. All helpers operate on CRLF-terminated strings and return bytes
 ready to be sent over a TCP socket.
 """
 from __future__ import annotations
