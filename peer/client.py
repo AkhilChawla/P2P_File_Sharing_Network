@@ -1,7 +1,6 @@
 """Peer client logic for interacting with the centralized index server."""
 from __future__ import annotations
 
-import json
 import logging
 import platform
 import socket
@@ -72,19 +71,12 @@ class CentralServerClient:
         peer_host: str,
         peer_port: int,
         logger,
-        *,
-        offline: bool = False,
-        offline_index: str | None = None,
     ) -> None:
         self.server_host = server_host
         self.server_port = server_port
         self.peer_host = peer_host
         self.peer_port = peer_port
         self.logger = logger
-        self.offline = offline
-        self.offline_index_path = Path(offline_index) if offline_index else Path("offline_index.json")
-        if self.offline:
-            self.offline_index_path.parent.mkdir(parents=True, exist_ok=True)
         self._socket: Optional[socket.socket] = None
 
     def add(self, rfc_number: int, title: str) -> ServerResponse:
@@ -104,8 +96,6 @@ class CentralServerClient:
         return self._send_request("LIST", "ALL", headers)
 
     def _send_request(self, method: str, resource: str, headers: dict[str, str]) -> ServerResponse:
-        if self.offline:
-            return self._handle_offline(method, resource, headers)
         payload = protocol.build_request(method, resource, headers)
         request_text = payload.decode("utf-8")
         self.logger.debug("Sending to server\n%s", request_text.replace(protocol.CRLF, "\n"))
@@ -167,83 +157,6 @@ class CentralServerClient:
             except OSError:
                 pass
             self._socket = None
-
-    def _handle_offline(self, method: str, resource: str, headers: dict[str, str]) -> ServerResponse:
-        index = self._offline_load_index()
-        rfcs = index.setdefault("rfcs", {})
-        if method == "ADD":
-            try:
-                rfc_number = self._parse_rfc_resource(resource)
-            except ValueError as exc:
-                return self._offline_response(400, "Bad Request", str(exc))
-            host = headers.get("Host")
-            port = headers.get("Port")
-            title = headers.get("Title", "")
-            if host is None or port is None:
-                return self._offline_response(400, "Bad Request", "Missing Host/Port headers")
-            try:
-                port_value = int(port)
-            except ValueError:
-                return self._offline_response(400, "Bad Request", "Port header must be numeric")
-            rfcs[str(rfc_number)] = {"host": host, "port": port_value, "title": title}
-            self._offline_save_index(index)
-            body = self._format_index_lines({str(rfc_number): rfcs[str(rfc_number)]})
-            return self._offline_response(200, "OK", body)
-        if method == "LIST":
-            body = self._format_index_lines(rfcs)
-            status = 200 if body else 404
-            reason = "OK" if status == 200 else "Not Found"
-            return self._offline_response(status, reason, body)
-        if method == "LOOKUP":
-            try:
-                rfc_number = self._parse_rfc_resource(resource)
-            except ValueError as exc:
-                return self._offline_response(400, "Bad Request", str(exc))
-            entries = rfcs.get(str(rfc_number))
-            if not entries:
-                return self._offline_response(404, "Not Found", "")
-            body = self._format_index_lines({str(rfc_number): entries})
-            return self._offline_response(200, "OK", body)
-        return self._offline_response(400, "Bad Request", f"Unsupported method {method} in offline mode")
-
-    def _offline_response(self, status: int, reason: str, body: str) -> ServerResponse:
-        parts = [f"{protocol.PROTOCOL_VERSION} {status} {reason}"]
-        if body:
-            parts.append("")
-            parts.append(body)
-        raw = protocol.CRLF.join(parts) + protocol.CRLF + protocol.CRLF
-        return ServerResponse(status, reason, {}, body, raw, f"{protocol.PROTOCOL_VERSION} {status} {reason}")
-
-    def _offline_load_index(self) -> dict:
-        path = self.offline_index_path
-        if not path.exists():
-            return {}
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            self.logger.warning("Offline index %s is corrupted; starting fresh.", path)
-            return {}
-
-    def _offline_save_index(self, data: dict) -> None:
-        path = self.offline_index_path
-        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-    @staticmethod
-    def _parse_rfc_resource(resource: str) -> int:
-        parts = resource.split()
-        if len(parts) != 2 or parts[0] != "RFC":
-            raise ValueError("Resource must look like 'RFC <number>'")
-        return int(parts[1])
-
-    @staticmethod
-    def _format_index_lines(rfcs: dict) -> str:
-        lines: List[str] = []
-        for rfc_number in sorted(rfcs, key=lambda value: int(value)):
-            entry = rfcs[rfc_number]
-            title = entry.get("title", "")
-            lines.append(f"RFC {rfc_number} {title} {entry['host']} {entry['port']}")
-        return protocol.CRLF.join(lines)
-
 
 @dataclass
 class DownloadResult:
@@ -445,8 +358,6 @@ class PeerNode:
         return first_line or f"RFC {path.stem.split('_')[-1]}"
 
     def _refresh_local_from_entries(self, entries: List[PeerLocation]) -> None:
-        if self.central_client.offline:
-            return
         for entry in entries:
             path = self.storage.path_for(entry.number)
             if not path.exists():

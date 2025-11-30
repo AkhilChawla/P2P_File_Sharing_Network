@@ -1,6 +1,6 @@
 ## P2P File Sharing with Central Index
 
-We built this for CSC/ECE 573 Project #1. The repository includes both parts we needed: a centralized index server and a peer client with an upload server. You can run everything locally and use the CLI shell to simulate multiple peers trading RFC files.
+Centralized index server plus peer client/upload server for the CSC/ECE 573 P2P project. Run everything locally to simulate multiple peers exchanging RFC files.
 
 ### What's here
 
@@ -25,141 +25,78 @@ peer1_store/, peer2_store/, peer3_store/  # Example local stores for peers
 server/server.py        # Centralized index server
 ```
 
-### Running the peer shell
+### Quick start (Makefile)
+
+Requires Python 3.9+.
 
 ```
-python -m peer.cli \
-  --server-host <central-server-host> \
-  --server-port 7734 \
-  --peer-host $(hostname) \
-  --peer-port 6000
+# Terminal 1: start the central server
+make server
+
+# Terminal 2: launch peer on port 6001 using the provided store
+make peer1 SERVER_HOST=127.0.0.1 SERVER_PORT=7734
+
+# Terminal 3: launch a second peer on port 6002
+make peer2 SERVER_HOST=127.0.0.1 SERVER_PORT=7734
 ```
 
-The CLI starts the upload server and scans the chosen RFC directory on startup, automatically registering any files it finds with the central server. Point each peer at its own store to keep downloads separated.
+`make peer` starts the shell with your own `PEER_PORT`/`RFC_STORE` values. Run `make help` to see all targets and defaults.
 
-#### Example workflow
+### End-to-end test guide (all flows)
 
-Terminal 1 - start the central server:
+Open separate terminals.
 
+1) Start the central index
 ```
-python3 -m server.server
+make server SERVER_HOST=127.0.0.1 SERVER_PORT=7734
 ```
+If 7734 is busy, pick another port and reuse that value for peers.
 
-Terminal 2 - launch peer #1 on port 6001 with its own store:
-
+2) Launch peer #1 (uploads + client shell)
 ```
-python3 -m peer.cli --server-host 127.0.0.1 --server-port 7734 --peer-port 6001 --rfc-store ./peer1_store
+make peer1 SERVER_HOST=127.0.0.1 SERVER_PORT=7734
 ```
-
-Terminal 3 - launch peer #2 on port 6002 with a separate store:
-
+At `peer>` check registration:
 ```
-python3 -m peer.cli --server-host 127.0.0.1 --server-port 7734 --peer-port 6002 --rfc-store ./peer2_store
-```
-
-Drop RFC files into a peer's store before launching and they'll be registered automatically. You can still add more after startup:
-
-```
-add 1 peer1_store/rfc_1.txt "My First RFC"
-add 2 peer1_store/rfc_2.txt "My Second RFC"
+list          # should show RFC 1/2 on localhost:6001
 ```
 
-On any peer, the `list` and `lookup` commands print the raw responses from the server:
-
+3) Launch peer #2
 ```
-list                 # prints the raw LIST response from the server
-lookup 1             # prints the raw LOOKUP response for RFC 1
-get 1 localhost 6001 # downloads RFC 1 from the peer on port 6001
+make peer2 SERVER_HOST=127.0.0.1 SERVER_PORT=7734
 ```
-
-#### Offline testing mode
-
-If you want to try the peer logic without the central server running:
-
+Check index visibility:
 ```
-python -m peer.cli --offline --offline-index /tmp/p2p_index.json --peer-port 6001
+list
+lookup 1
 ```
 
-ADD/LIST/LOOKUP read and write that JSON file so multiple peers on the same machine can coordinate without opening sockets.
-
-### Running the central server
-
+4) Add a new RFC from peer1
 ```
-python -m server.server
+add 42 sample_rfc/rfc_1.txt "Test RFC 42"
+list          # RFC 42 now at localhost:6001
 ```
 
-The server listens on `0.0.0.0:7734`, logs to stdout, and serves the live index used by peers. Start it before launching peers (skip `--offline`) so all requests hit the real implementation.
-
-### Message formats (per the project spec)
-
-- All requests and responses use the `P2P-CI/1.0` version string.
-- Peer-to-peer `GET RFC <number>` requests include `Host` (hostname of the peer serving the RFC) and `OS` headers. The upload server replies with status `200`, `400`, `404`, or `505` plus `Date`, `OS`, `Last-Modified`, `Content-Length`, and `Content-Type` headers. For this project `Content-Type` is always `text/plain`. Example:
-
+5) Download from peer2 (peer-to-peer GET)
 ```
-GET RFC 1234 P2P-CI/1.0\r\n
-Host: somehost.csc.ncsu.edu\r\n
-OS: Mac OS 10.4.1\r\n
-\r\n
+lookup 42
+get 42 localhost 6001
+list          # RFC 42 listed for both peers
 ```
 
-Response:
+### Manual run (without Makefile)
 
+Start server:
 ```
-P2P-CI/1.0 200 OK\r\n
-Date: Wed, 12 Feb 2009 15:12:05 GMT\r\n
-OS: Mac OS 10.2.1\r\n
-Last-Modified: Thu, 21 Jan 2001 09:23:46 GMT\r\n
-Content-Length: 12345\r\n
-Content-Type: text/plain\r\n
-\r\n
-(contents of the RFC)
+python -m server.server --host 0.0.0.0 --port 7734
 ```
 
-- Peer-to-server requests (`ADD`, `LOOKUP`, `LIST`) include `Host`, `Port`, and (for `ADD`) `Title`. The client prints raw server responses and handles results like `200 OK`, `400 Bad Request`, `404 Not Found`, and `505 P2P Version Not Supported`. Examples:
-
-ADD RFC:
-
+Start a peer shell (new terminal):
 ```
-ADD RFC 123 P2P-CI/1.0\r\n
-Host: thishost.csc.ncsu.edu\r\n
-Port: 5678\r\n
-Title: A Proferred Official ICP\r\n
-\r\n
-P2P-CI/1.0 200 OK\r\n
-\r\n
-RFC 123 A Proferred Official ICP thishost.csc.ncsu.edu 5678
+python -m peer.cli --server-host 127.0.0.1 --server-port 7734 --peer-port 6001 --rfc-store ./peer1_store
 ```
 
-LOOKUP RFC:
-
-```
-LOOKUP RFC 3457 P2P-CI/1.0\r\n
-Host: thishost.csc.ncsu.edu\r\n
-Port: 5678\r\n
-Title: Requirements for IPsec Remote Access Scenarios\r\n
-\r\n
-P2P-CI/1.0 200 OK\r\n
-\r\n
-RFC 3457 Requirements for IPsec Remote Access Scenarios peerA.example.com 6001\r\n
-RFC 3457 Requirements for IPsec Remote Access Scenarios peerB.example.com 6002
-```
-
-LIST ALL:
-
-```
-LIST ALL P2P-CI/1.0\r\n
-Host: thishost.csc.ncsu.edu\r\n
-Port: 5678\r\n
-\r\n
-P2P-CI/1.0 200 OK\r\n
-\r\n
-RFC 1 First RFC peerA.example.com 6001\r\n
-RFC 2 Second RFC peerB.example.com 6002
-```
-
-### Shell commands
-
-Once the `peer>` prompt appears, you can run:
+### Shell commands (at the `peer>` prompt)
 
 | Command | Description |
 | --- | --- |
@@ -167,7 +104,6 @@ Once the `peer>` prompt appears, you can run:
 | `sync` | Register all local RFCs with the central server (also runs on startup). |
 | `seed [dir]` | Copy sample RFCs from `sample_rfc/` (or a custom dir) into the local store and register them. |
 | `list` | Run `LIST ALL` against the central server and print the raw response. |
-| `local` | Show RFC files stored locally. |
 | `lookup <rfc>` | Execute `LOOKUP RFC <num>` and print the raw response. |
 | `add <rfc> <path> "Title"` | Copy a file into the local store, register it with the server, and print the raw `ADD` response. |
 | `get <rfc>` | Find peers via the central server, download the RFC via P2P `GET`, store it locally, and re-register it. |

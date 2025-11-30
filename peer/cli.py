@@ -22,8 +22,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--rfc-store", default="rfc_store", help="Directory where RFC files are stored locally")
     parser.add_argument("--sample-dir", default="sample_rfc", help="Sample RFC directory used by the seed command")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
-    parser.add_argument("--offline", action="store_true", help="Run without a centralized server (uses local index file)")
-    parser.add_argument("--offline-index", default="offline_index.json", help="Path to shared index file when --offline is set")
     return parser
 
 
@@ -36,8 +34,6 @@ class PeerShell:
         try:
             self.peer.start()
         except (ConnectionError, TimeoutError) as exc:
-            if self.peer.config.offline:
-                raise
             self.logger.error("Unable to reach central server: %s", exc)
             print("Failed to contact central server. Exiting.")
             self.peer.shutdown()
@@ -61,8 +57,6 @@ class PeerShell:
                 try:
                     self._dispatch(command)
                 except (ConnectionError, TimeoutError) as exc:
-                    if self.peer.config.offline:
-                        raise
                     self.logger.error("Connection to central server lost: %s", exc)
                     print("Central server connection lost. Exiting.")
                     break
@@ -91,13 +85,6 @@ class PeerShell:
             # Print the raw response exactly as received from the server
             print("LIST response:")
             print(response.raw.replace("\r\n", "\n"))
-        elif cmd == "local":
-            files = self.peer.storage.list_rfc_files()
-            if not files:
-                print("No local RFCs.")
-            else:
-                for path in files:
-                    print(path.name)
         elif cmd == "lookup":
             if not args:
                 raise ValueError("Usage: lookup <rfc_number> [title]")
@@ -153,7 +140,6 @@ class PeerShell:
             "  sync                      Register all local RFCs with the central server\n"
             "  seed [dir]                Copy sample RFCs into the local store and register them\n"
             "  list                      List the central index as returned by the server\n"
-            "  local                     List RFC files stored locally\n"
             "  lookup <rfc> [title]      Find peers that host an RFC\n"
             "  add <rfc> <file> \"Title\"  Copy a file into the local store and ADD to server\n"
             "  get <rfc> <host> <port>   Download RFC content from a specific peer\n"
@@ -172,8 +158,6 @@ def main(argv: list[str] | None = None) -> int:
         peer_port=args.peer_port,
         rfc_store=args.rfc_store,
         sample_dir=args.sample_dir,
-        offline=args.offline,
-        offline_index=args.offline_index,
     )
     logger = configure_logging(args.verbose)
     store = RFCStorage(config.rfc_store)
@@ -184,8 +168,6 @@ def main(argv: list[str] | None = None) -> int:
         config.peer_host,
         config.peer_port,
         logger,
-        offline=config.offline,
-        offline_index=config.offline_index,
     )
     peer = PeerNode(config, central_client, upload_server, store, logger)
     shell = PeerShell(peer)

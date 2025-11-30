@@ -12,5 +12,3 @@ class PeerConfig:
     peer_port: int = 6000
     rfc_store: str = "rfc_store"
     sample_dir: str = "sample_rfc"
-    offline: bool = False
-    offline_index: str = "offline_index.json"
