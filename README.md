@@ -50,7 +50,6 @@ Open separate terminals.
 ```
 make server SERVER_HOST=127.0.0.1 SERVER_PORT=7734
 ```
-If 7734 is busy, pick another port and reuse that value for peers.
 
 2) Launch peer #1 (uploads + client shell)
 ```
