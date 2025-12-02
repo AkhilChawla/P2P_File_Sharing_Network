@@ -84,6 +84,12 @@ get 42 localhost 6001
 list          # RFC 42 listed for both peers
 ```
 
+6) Optional: trigger a version mismatch (expect 505) against a peer upload server
+```
+printf 'GET RFC 1 P2P-CI/2.0\r\nHost: localhost\r\nOS: test\r\n\r\n' \
+  | nc localhost 6001
+```
+
 ### Manual run (without Makefile)
 
 Start server:

@@ -119,6 +119,7 @@ class CentralServerClient:
                 sock = socket.create_connection((self.server_host, self.server_port), timeout=5)
                 sock.settimeout(5)
                 self._socket = sock
+                self.logger.info("Connected to server at port %s", self.server_port)
             except OSError as exc:
                 self._socket = None
                 raise ConnectionError(
@@ -228,8 +229,10 @@ class PeerNode:
                         resp.status_code,
                         resp.reason,
                     )
+                    self.logger.info("ADD response for RFC %s\n%s", number, resp.raw.replace(protocol.CRLF, "\n"))
                 else:
-                    self.logger.info("Registered local RFC %s (%s)", number, title)
+                    self.logger.info("Registering local RFC %s (%s)", number, title)
+                    self.logger.info("ADD response for RFC %s\n%s", number, resp.raw.replace(protocol.CRLF, "\n"))
             except Exception as exc:  # pylint: disable=broad-except
                 self.logger.warning("Unable to sync file %s: %s", path, exc)
 

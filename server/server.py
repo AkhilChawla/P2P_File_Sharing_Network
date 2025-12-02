@@ -25,6 +25,25 @@ logging.basicConfig(
 )
 LOGGER = logging.getLogger("p2p-ci-server")
 
+_PEER_LABEL_LOCK = threading.Lock()
+_PEER_LABEL_COUNTER = 0
+
+
+def _next_peer_label() -> str:
+    """Generate sequential peer labels: A, B, ..., Z, AA, AB, ..."""
+    global _PEER_LABEL_COUNTER
+    with _PEER_LABEL_LOCK:
+        idx = _PEER_LABEL_COUNTER
+        _PEER_LABEL_COUNTER += 1
+    label = ""
+    while True:
+        idx, rem = divmod(idx, 26)
+        label = chr(ord("A") + rem) + label
+        if idx == 0:
+            break
+        idx -= 1
+    return label
+
 
 @dataclass
 class RFCRecord:
@@ -133,7 +152,9 @@ def parse_rfc_resource(resource: str) -> Optional[int]:
 
 
 def handle_client(conn: socket.socket, addr: Tuple[str, int]) -> None:
+    peer_label = _next_peer_label()
     LOGGER.info("Accepted connection from %s:%s", addr[0], addr[1])
+    LOGGER.info("Added Peer%s:%s", peer_label, addr[1])
     peer_host: Optional[str] = None
     peer_port: Optional[int] = None
     try:
@@ -182,7 +203,7 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]) -> None:
                     continue
 
                 INDEX.add(number, title, host, port_value)
-                LOGGER.info("Registered RFC %s for %s:%s", number, host, port_value)
+                LOGGER.info("Registered RFC %s from %s:%s", number, host, port_value)
                 
                 body = f"RFC {number} {title} {host} {port_value}"
                 send_response(conn, 200, "OK", body, log_target=log_target)

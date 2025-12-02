@@ -58,7 +58,8 @@ class PeerUploadServer:
                 request_text = self._recv_text(conn)
                 if not request_text:
                     return
-                self.logger.debug("P2P request from %s:%s\n%s", addr[0], addr[1], request_text.replace(protocol.CRLF, "\n"))
+                # Log the full incoming GET request at INFO so peer operators can see downloads.
+                self.logger.info("P2P request from %s:%s\n%s", addr[0], addr[1], request_text.replace(protocol.CRLF, "\n"))
                 request_line, headers, _ = protocol.parse_message(request_text)
                 method, resource, version = protocol.parse_request_line(request_line)
                 if version != protocol.PROTOCOL_VERSION:
